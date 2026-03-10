@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pomodoro Simple</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <button id="resetAllTop" class="sun-btn" aria-label="Reiniciar ciclo completo" title="Nuevo trabajo">
+      <svg class="ui-icon top-ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <circle cx="12" cy="12" r="4" />
+        <path d="M12 2v2" />
+        <path d="M12 20v2" />
+        <path d="m4.93 4.93 1.41 1.41" />
+        <path d="m17.66 17.66 1.41 1.41" />
+        <path d="M2 12h2" />
+        <path d="M20 12h2" />
+        <path d="m6.34 17.66-1.41 1.41" />
+        <path d="m19.07 4.93-1.41 1.41" />
+      </svg>
+    </button>
+    <button id="openSettings" class="gear-btn" aria-label="Abrir configuración">
+      <svg class="ui-icon top-ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+        <path
+          d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 0 0-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 0 0-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 0 0-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 0 0-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+        />
+        <circle cx="12" cy="12" r="3" />
+      </svg>
+    </button>
+
+    <main class="pomodoro">
+      <div class="objective-row">
+        <button
+          id="toggleNote"
+          class="objective-note-btn"
+          type="button"
+          aria-label="Abrir nota rápida"
+          aria-expanded="false"
+          title="Nota rápida"
+        >
+          <svg class="ui-icon note-state-icon note-plus-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 5v14" />
+            <path d="M5 12h14" />
+          </svg>
+          <svg class="ui-icon note-state-icon note-close-icon" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12" />
+            <path d="m18 6-12 12" />
+          </svg>
+        </button>
+        <p id="objective" class="objective">
+          <span id="objectiveLabel">Objetivo:</span>
+          <span
+            id="objectiveValue"
+            class="objective-value"
+            contenteditable="false"
+            spellcheck="false"
+            title="Haz clic para editar el objetivo"
+            >Trabajo</span
+          >
+        </p>
+      </div>
+      <div id="noteBox" class="note-box" hidden>
+        <textarea
+          id="noteInput"
+          rows="3"
+          maxlength="280"
+          placeholder="¿De qué trata el objetivo de hoy?"
+          aria-label="Nota rápida"
+        ></textarea>
+      </div>
+      <button id="time" class="time-display work" type="button" title="Pulsa para iniciar o pausar">
+        25:00
+      </button>
+    </main>
+
+    <div class="bottom-controls">
+      <button
+        id="resetCycleMain"
+        class="icon-control-btn"
+        type="button"
+        aria-label="Reiniciar contador actual"
+        title="Reiniciar contador actual"
+      >
+        <svg class="ui-icon bottom-ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M3 2v6h6" />
+          <path d="M3 13a9 9 0 1 0 3-7.7L3 8" />
+        </svg>
+      </button>
+      <button
+        id="skipState"
+        class="icon-control-btn"
+        type="button"
+        aria-label="Saltar al siguiente estado"
+        title="Siguiente estado"
+      >
+        <svg class="ui-icon bottom-ui-icon" viewBox="0 0 24 24" aria-hidden="true">
+          <polygon points="5 4 15 12 5 20 5 4" />
+          <line x1="19" y1="5" x2="19" y2="19" />
+        </svg>
+      </button>
+    </div>
+
+    <aside id="settingsPanel" class="settings-panel" aria-hidden="true">
+      <div class="settings-header">
+        <h2>Configuración</h2>
+        <button id="closeSettings" class="icon-btn" aria-label="Cerrar configuración">x</button>
+      </div>
+
+      <label class="field">
+        Concentración (min)
+        <input id="focusMinutes" type="number" min="1" max="180" />
+      </label>
+
+      <label class="field">
+        Descanso corto (min)
+        <input id="shortBreakMinutes" type="number" min="1" max="90" />
+      </label>
+
+      <label class="field">
+        Descanso largo (min)
+        <input id="longBreakMinutes" type="number" min="1" max="120" />
+      </label>
+
+      <label class="field">
+        Pomodoros antes de descanso largo
+        <input id="pomodorosBeforeLongBreak" type="number" min="1" max="12" />
+      </label>
+
+      <label class="field">
+        Volumen de tonos
+        <div class="slider-row">
+          <input id="toneVolumePercentRange" type="range" min="50" max="300" step="5" value="175" />
+          <div class="slider-value">
+            <input id="toneVolumePercentInput" type="number" min="50" max="300" step="5" value="175" />
+            <span>%</span>
+          </div>
+        </div>
+      </label>
+
+      <label class="field">
+        Tiempo de repetición de tono
+        <div class="slider-row">
+          <input id="alarmRepeatSecondsRange" type="range" min="0" max="20" step="1" value="5" />
+          <div class="slider-value">
+            <input id="alarmRepeatSecondsInput" type="number" min="0" max="20" step="1" value="5" />
+            <span>s</span>
+          </div>
+        </div>
+      </label>
+
+      <label class="field">
+        Tono al terminar concentración
+        <div class="tone-picker">
+          <select id="focusEndTone">
+            <option value="campana">Campana</option>
+            <option value="suave">Suave</option>
+            <option value="digital">Digital</option>
+            <option value="alarma">Alarma fuerte</option>
+            <option value="gong">Gong</option>
+            <option value="cristal">Cristal</option>
+            <option value="madera">Madera</option>
+            <option value="pulso">Pulso</option>
+          </select>
+          <button
+            id="previewFocusTone"
+            class="tone-preview-btn"
+            type="button"
+            aria-label="Probar tono de concentración"
+            title="Probar tono"
+          >
+            &#9654;
+          </button>
+        </div>
+      </label>
+
+      <label class="field">
+        Tono al terminar descanso
+        <div class="tone-picker">
+          <select id="breakEndTone">
+            <option value="campana">Campana</option>
+            <option value="suave">Suave</option>
+            <option value="digital">Digital</option>
+            <option value="alarma">Alarma fuerte</option>
+            <option value="gong">Gong</option>
+            <option value="cristal">Cristal</option>
+            <option value="madera">Madera</option>
+            <option value="pulso">Pulso</option>
+          </select>
+          <button
+            id="previewBreakTone"
+            class="tone-preview-btn"
+            type="button"
+            aria-label="Probar tono de descanso"
+            title="Probar tono"
+          >
+            &#9654;
+          </button>
+        </div>
+      </label>
+
+      <div class="settings-buttons">
+        <button id="saveSettings" class="main">Guardar</button>
+      </div>
+
+      <p id="settingsStatus" class="status" aria-live="polite"></p>
+    </aside>
+
+    <div id="sparkLayer" class="spark-layer" aria-hidden="true"></div>
+    <div id="overlay" class="overlay" hidden></div>
+    <div id="shutdownScreen" class="shutdown-screen" hidden>
+      <div class="shutdown-card">
+        <div class="shutdown-zzz" aria-hidden="true">
+          <span>z</span>
+          <span>z</span>
+          <span>z</span>
+        </div>
+        <h1>¡Trabajo listo por hoy!</h1>
+        <p>Es hora de descansar.</p>
+      </div>
+      <p class="shutdown-footer">
+        Pomodoro terminado. Si deseas, puedes volver a ejecutarlo y recargar la página.
+      </p>
+    </div>
+
+    <script src="config.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>

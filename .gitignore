@@ -1,0 +1,35 @@
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Entornos virtuales
+.venv/
+venv/
+env/
+
+# Caché local de uv
+.uv-cache/
+
+# Node (si se usa)
+node_modules/
+
+# Logs temporales
+*.log
+*.pid
+
+# IDE
+.vscode/
+.idea/
+
+# Datos locales
+pomodoro_registros.csv
+pomodoro_registros*.csv
