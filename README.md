@@ -18,15 +18,20 @@ Aplicación Pomodoro simple en web, con ejecución local y registro automático 
 - `script.js`: lógica del temporizador e interfaz.
 - `config.js`: configuración por defecto.
 - `web_server.py`: servidor local y API de guardado CSV.
-- `run_pomodoro.sh`: script de arranque interactivo.
+- `run_pomodoro.sh`: script de arranque interactivo (Linux).
 - `pomodoro_registros.csv`: registros locales (ignorado en git).
 
 ## Requisitos
 
-- macOS
-- Python 3 instalado
+- Python `>= 3.11`
+- Versión usada en este proyecto: `Python 3.14.3`
+- Librerías externas para modo web (`web_server.py`): **ninguna** (solo librería estándar de Python)
 
-## Ejecutar (local)
+Opcional (solo si quieres usar `app.py` en modo ventana de escritorio):
+
+- `pywebview>=5.3`
+
+## Ejecutar en Linux
 
 Desde la carpeta del proyecto:
 
@@ -40,7 +45,29 @@ Comandos interactivos en terminal:
 - `status`: muestra estado.
 - `q`: cierra Pomodoro.
 
-## Comando global opcional (`pomodoro`)
+Alternativa directa con Python:
+
+```bash
+python3 web_server.py --interactive --open-browser --fresh-start --port 8765
+```
+
+## Ejecutar en Windows (PowerShell)
+
+Desde la carpeta del proyecto:
+
+```powershell
+py -3 web_server.py --interactive --open-browser --fresh-start --port 8765
+```
+
+Si tu sistema no reconoce `py`, usa:
+
+```powershell
+python web_server.py --interactive --open-browser --fresh-start --port 8765
+```
+
+Para cerrar, en esa terminal escribe `q`.
+
+## Comando global opcional (`pomodoro`) en Linux
 
 Si quieres ejecutarlo desde cualquier carpeta del terminal, primero entra a la carpeta del proyecto y ejecuta:
 
