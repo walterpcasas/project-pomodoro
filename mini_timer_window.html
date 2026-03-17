@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pomodoro</title>
+    <link rel="stylesheet" href="mini_timer.css" />
+  </head>
+  <body class="mini-timer mode-work">
+    <p id="miniTimerTime" class="mini-time">25:00</p>
+
+    <script>
+      window.updateMiniTimer = function updateMiniTimer(payload) {
+        const bodyClass = `mini-timer mode-${payload.mode || "work"}`;
+        document.body.className = bodyClass;
+        const timeEl = document.getElementById("miniTimerTime");
+        if (timeEl) {
+          timeEl.textContent = payload.time || "25:00";
+        }
+      };
+    </script>
+  </body>
+</html>

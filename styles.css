@@ -243,6 +243,29 @@ button.sun-btn {
   line-height: 1;
   text-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
   cursor: pointer;
+  transition: opacity 0.14s ease, transform 0.14s ease, background-color 0.14s ease,
+    box-shadow 0.14s ease;
+}
+
+.icon-control-btn[aria-pressed="true"] {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
+#openMiniTimer {
+  border-radius: 999px;
+}
+
+#openMiniTimer[aria-pressed="false"]:not(:disabled) {
+  opacity: 1;
+  background: rgba(94, 98, 103, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12), 0 6px 16px rgba(0, 0, 0, 0.14);
+}
+
+.icon-control-btn:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .ui-icon {

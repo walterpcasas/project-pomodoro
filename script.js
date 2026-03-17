@@ -16,6 +16,7 @@ const APP_CONFIG = window.POMODORO_CONFIG ?? {
 };
 
 const LOGS_STORAGE_KEY = "pomodoro_logs_v1";
+const MINI_TIMER_AUTO_OPEN_KEY = "pomodoro_mini_timer_auto_open_v1";
 const VALID_TYPES = new Set(["concentracion", "descanso"]);
 const SHOULD_RESET_ON_LOAD = new URLSearchParams(window.location.search).get("reset") === "1";
 const VALID_TONES = new Set(["campana", "suave", "digital", "alarma", "gong", "cristal", "madera", "pulso"]);
@@ -87,6 +88,7 @@ const previewFocusToneBtn = document.getElementById("previewFocusTone");
 const previewBreakToneBtn = document.getElementById("previewBreakTone");
 const saveSettingsBtn = document.getElementById("saveSettings");
 const resetCycleMainBtn = document.getElementById("resetCycleMain");
+const openMiniTimerBtn = document.getElementById("openMiniTimer");
 const settingsStatusEl = document.getElementById("settingsStatus");
 const shutdownScreenEl = document.getElementById("shutdownScreen");
 let wakeLockSentinel = null;
@@ -112,6 +114,9 @@ let isHealthCheckInFlight = false;
 let healthCheckIntervalId = null;
 let healthCheckFailures = 0;
 let hasSeenHealthyServer = false;
+let miniTimerWindow = null;
+let miniTimerTimeEl = null;
+let miniTimerAutoOpenEnabled = loadMiniTimerAutoOpenPreference();
 
 const HEALTH_CHECK_INTERVAL_MS = 1800;
 
@@ -216,6 +221,19 @@ function loadLogs() {
 
 function saveLogs(nextLogs) {
   localStorage.setItem(LOGS_STORAGE_KEY, JSON.stringify(nextLogs));
+}
+
+function loadMiniTimerAutoOpenPreference() {
+  return localStorage.getItem(MINI_TIMER_AUTO_OPEN_KEY) !== "0";
+}
+
+function saveMiniTimerAutoOpenPreference(isEnabled) {
+  if (isEnabled) {
+    localStorage.setItem(MINI_TIMER_AUTO_OPEN_KEY, "1");
+    return;
+  }
+
+  localStorage.setItem(MINI_TIMER_AUTO_OPEN_KEY, "0");
 }
 
 function getDurationSeconds(nextMode) {
@@ -339,6 +357,7 @@ function draw() {
   bodyEl.classList.add(`mode-${mode}`);
   timeEl.classList.remove("work", "shortBreak", "longBreak", "running", "paused");
   timeEl.classList.add(mode, intervalId ? "running" : "paused");
+  syncMiniTimerWindow();
 }
 
 function registerCurrentSegment() {
@@ -401,6 +420,212 @@ function syncSliderFromInput(inputEl, rangeEl, fallback, min, max) {
 
 function getPendingAlarmRepeatSeconds() {
   return normalizeNumber(alarmRepeatInput.value, settings.alarmRepeatSeconds, 0, 20);
+}
+
+function getMiniTimerPayload() {
+  return {
+    mode,
+    time: formatTimeDisplay(secondsLeft),
+  };
+}
+
+function getNativeMiniTimerApi() {
+  const api = window.pywebview?.api;
+  if (!api) return null;
+
+  if (
+    typeof api.show_native_mini_timer !== "function" ||
+    typeof api.hide_native_mini_timer !== "function" ||
+    typeof api.sync_native_mini_timer !== "function"
+  ) {
+    return null;
+  }
+
+  return api;
+}
+
+function hasNativeMiniTimerSupport() {
+  return getNativeMiniTimerApi() !== null;
+}
+
+function canUseMiniTimerWindow() {
+  return "documentPictureInPicture" in window;
+}
+
+function setMiniTimerAutoOpenEnabled(isEnabled) {
+  miniTimerAutoOpenEnabled = isEnabled;
+  saveMiniTimerAutoOpenPreference(isEnabled);
+  updateMiniTimerButtonState();
+}
+
+function syncMiniTimerAvailability() {
+  if (hasNativeMiniTimerSupport()) {
+    openMiniTimerBtn.hidden = true;
+    openMiniTimerBtn.disabled = true;
+    return;
+  }
+
+  openMiniTimerBtn.hidden = false;
+  const isSupported = canUseMiniTimerWindow();
+  openMiniTimerBtn.disabled = !isSupported;
+  if (!isSupported) {
+    openMiniTimerBtn.setAttribute("aria-pressed", "false");
+    openMiniTimerBtn.title = "Mini contador no disponible en este navegador";
+    return;
+  }
+
+  updateMiniTimerButtonState();
+}
+
+function updateMiniTimerButtonState() {
+  if (!canUseMiniTimerWindow()) return;
+  openMiniTimerBtn.setAttribute("aria-pressed", String(miniTimerAutoOpenEnabled));
+  openMiniTimerBtn.title = miniTimerAutoOpenEnabled
+    ? "Desactivar mini contador flotante"
+    : "Activar mini contador flotante";
+}
+
+function clearMiniTimerWindowState() {
+  miniTimerWindow = null;
+  miniTimerTimeEl = null;
+  updateMiniTimerButtonState();
+}
+
+function syncMiniTimerWindow() {
+  const nativeMiniTimerApi = getNativeMiniTimerApi();
+  if (nativeMiniTimerApi) {
+    nativeMiniTimerApi.sync_native_mini_timer(getMiniTimerPayload()).catch(() => {});
+    return;
+  }
+
+  if (!miniTimerWindow || miniTimerWindow.closed) {
+    clearMiniTimerWindowState();
+    return;
+  }
+
+  miniTimerWindow.document.body.className = `mini-timer mode-${mode}`;
+  miniTimerTimeEl.textContent = getMiniTimerPayload().time;
+}
+
+function buildMiniTimerMarkup(pipWindow) {
+  const doc = pipWindow.document;
+  const stylesheetUrl = new URL("mini_timer.css", window.location.href).href;
+
+  doc.head.replaceChildren();
+  doc.body.replaceChildren();
+
+  const charsetMeta = doc.createElement("meta");
+  charsetMeta.setAttribute("charset", "UTF-8");
+
+  const viewportMeta = doc.createElement("meta");
+  viewportMeta.name = "viewport";
+  viewportMeta.content = "width=device-width, initial-scale=1.0";
+
+  const titleEl = doc.createElement("title");
+  titleEl.textContent = "Pomodoro";
+
+  const stylesheetLink = doc.createElement("link");
+  stylesheetLink.rel = "stylesheet";
+  stylesheetLink.href = stylesheetUrl;
+
+  doc.head.append(charsetMeta, viewportMeta, titleEl, stylesheetLink);
+
+  const timeLabel = doc.createElement("p");
+  timeLabel.id = "miniTimerTime";
+  timeLabel.className = "mini-time";
+
+  doc.body.append(timeLabel);
+  miniTimerTimeEl = timeLabel;
+}
+
+function handleMiniTimerWindowClosed() {
+  clearMiniTimerWindowState();
+}
+
+async function closeMiniTimerWindow(options = {}) {
+  const { preserveAutoOpen = true } = options;
+  if (!miniTimerWindow || miniTimerWindow.closed) {
+    clearMiniTimerWindowState();
+    if (!preserveAutoOpen) {
+      setMiniTimerAutoOpenEnabled(false);
+    }
+    return;
+  }
+
+  const activeWindow = miniTimerWindow;
+  clearMiniTimerWindowState();
+  activeWindow.close();
+  if (!preserveAutoOpen) {
+    setMiniTimerAutoOpenEnabled(false);
+  }
+}
+
+async function openMiniTimerWindow(options = {}) {
+  const { silent = false } = options;
+  if (!canUseMiniTimerWindow()) {
+    return;
+  }
+
+  if (miniTimerWindow && !miniTimerWindow.closed) {
+    miniTimerWindow.focus();
+    return;
+  }
+
+  try {
+    const pipWindow = await window.documentPictureInPicture.requestWindow({
+      width: 320,
+      height: 220,
+    });
+
+    miniTimerWindow = pipWindow;
+    buildMiniTimerMarkup(pipWindow);
+    pipWindow.addEventListener("pagehide", handleMiniTimerWindowClosed, { once: true });
+    syncMiniTimerWindow();
+    updateMiniTimerButtonState();
+  } catch (error) {
+    if (!silent) {
+      showSettingsStatus("No se pudo abrir la mini ventana");
+    }
+    console.error("No se pudo abrir el mini contador flotante:", error);
+  }
+}
+
+async function toggleMiniTimerWindow() {
+  if (miniTimerAutoOpenEnabled) {
+    await closeMiniTimerWindow({ preserveAutoOpen: false });
+    return;
+  }
+
+  setMiniTimerAutoOpenEnabled(true);
+  syncMiniTimerVisibility();
+}
+
+function syncMiniTimerVisibility() {
+  const nativeMiniTimerApi = getNativeMiniTimerApi();
+  if (nativeMiniTimerApi) {
+    const hasFocus = typeof document.hasFocus !== "function" ? true : document.hasFocus();
+    const shouldShowMiniTimer = document.visibilityState !== "visible" || !hasFocus;
+
+    if (shouldShowMiniTimer) {
+      nativeMiniTimerApi.show_native_mini_timer(getMiniTimerPayload()).catch(() => {});
+      return;
+    }
+
+    nativeMiniTimerApi.hide_native_mini_timer().catch(() => {});
+    return;
+  }
+
+  if (!miniTimerAutoOpenEnabled || !canUseMiniTimerWindow()) return;
+
+  const hasFocus = typeof document.hasFocus !== "function" ? true : document.hasFocus();
+  const shouldShowMiniTimer = document.visibilityState !== "visible" || !hasFocus;
+
+  if (!shouldShowMiniTimer) {
+    closeMiniTimerWindow({ preserveAutoOpen: true }).catch(() => {});
+    return;
+  }
+
+  openMiniTimerWindow({ silent: true }).catch(() => {});
 }
 
 function getAlarmAudioContext() {
@@ -912,6 +1137,9 @@ resetCycleMainBtn.addEventListener("click", () => {
 resetAllTopBtn.addEventListener("click", () => {
   restartWholeCycle();
 });
+openMiniTimerBtn.addEventListener("click", () => {
+  toggleMiniTimerWindow().catch(() => {});
+});
 
 toneVolumeRange.addEventListener("input", () => {
   toneVolumeInput.value = toneVolumeRange.value;
@@ -981,6 +1209,8 @@ transitionToMode("work");
 setQuickNoteOpenState(false);
 startHealthMonitor();
 syncScreenWakeLock();
+syncMiniTimerAvailability();
+syncMiniTimerVisibility();
 
 if (SHOULD_RESET_ON_LOAD) {
   restartWholeCycle();
@@ -989,10 +1219,29 @@ if (SHOULD_RESET_ON_LOAD) {
   }
 }
 
-document.addEventListener("visibilitychange", syncScreenWakeLock);
-window.addEventListener("focus", syncScreenWakeLock);
-window.addEventListener("blur", syncScreenWakeLock);
+document.addEventListener("visibilitychange", () => {
+  syncScreenWakeLock();
+  syncMiniTimerVisibility();
+});
+window.addEventListener("focus", () => {
+  syncScreenWakeLock();
+  syncMiniTimerVisibility();
+});
+window.addEventListener("blur", () => {
+  syncScreenWakeLock();
+  syncMiniTimerVisibility();
+});
+window.addEventListener("pywebviewready", () => {
+  syncMiniTimerAvailability();
+  syncMiniTimerWindow();
+  syncMiniTimerVisibility();
+});
 window.addEventListener("beforeunload", () => {
+  closeMiniTimerWindow().catch(() => {});
+  const nativeMiniTimerApi = getNativeMiniTimerApi();
+  if (nativeMiniTimerApi) {
+    nativeMiniTimerApi.hide_native_mini_timer().catch(() => {});
+  }
   releaseScreenWakeLock().catch(() => {});
   if (healthCheckIntervalId !== null) {
     clearInterval(healthCheckIntervalId);

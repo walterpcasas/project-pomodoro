@@ -29,6 +29,7 @@ STATIC_ROUTES = {
     "/": ("index.html", "text/html; charset=utf-8"),
     "/index.html": ("index.html", "text/html; charset=utf-8"),
     "/styles.css": ("styles.css", "text/css; charset=utf-8"),
+    "/mini_timer.css": ("mini_timer.css", "text/css; charset=utf-8"),
     "/script.js": ("script.js", "application/javascript; charset=utf-8"),
     "/config.js": ("config.js", "application/javascript; charset=utf-8"),
 }

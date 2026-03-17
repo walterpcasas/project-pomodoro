@@ -1,0 +1,50 @@
+:root {
+  color-scheme: light;
+  --work-bg: #c63f35;
+  --short-break-bg: #2f8f5b;
+  --long-break-bg: #0f2747;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body.mini-timer {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  color: #fff;
+  font-family: "Avenir Next", "Montserrat", sans-serif;
+  background: var(--work-bg);
+}
+
+body.mode-shortBreak {
+  background: var(--short-break-bg);
+}
+
+body.mode-longBreak {
+  background: var(--long-break-bg);
+}
+
+.mini-time {
+  display: block;
+  margin: 0;
+  width: 100%;
+  padding: 0 0.18em;
+  text-align: center;
+  white-space: nowrap;
+  font-size: clamp(3.8rem, 26vw, 6.1rem);
+  font-weight: 700;
+  line-height: 0.9;
+  letter-spacing: 0.02em;
+  font-variant-numeric: tabular-nums;
+  text-shadow: 0 10px 24px rgba(0, 0, 0, 0.2);
+}
