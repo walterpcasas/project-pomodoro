@@ -89,6 +89,8 @@ const saveSettingsBtn = document.getElementById("saveSettings");
 const resetCycleMainBtn = document.getElementById("resetCycleMain");
 const settingsStatusEl = document.getElementById("settingsStatus");
 const shutdownScreenEl = document.getElementById("shutdownScreen");
+let wakeLockSentinel = null;
+let wakeLockRequestId = 0;
 
 let settings = loadSettings();
 let logs = loadLogs();
@@ -528,6 +530,62 @@ function playRepeatedTransitionAlarm(nextMode) {
   alarmRepeatTimeoutId = setTimeout(tick, 1000);
 }
 
+function canRequestWakeLock() {
+  return (
+    "wakeLock" in navigator &&
+    document.visibilityState === "visible" &&
+    typeof document.hasFocus === "function" &&
+    document.hasFocus()
+  );
+}
+
+async function requestScreenWakeLock() {
+  if (!canRequestWakeLock() || wakeLockSentinel) return;
+
+  const requestId = ++wakeLockRequestId;
+  try {
+    const sentinel = await navigator.wakeLock.request("screen");
+    if (requestId !== wakeLockRequestId) {
+      sentinel.release().catch(() => {});
+      return;
+    }
+
+    wakeLockSentinel = sentinel;
+    wakeLockSentinel.addEventListener(
+      "release",
+      () => {
+        wakeLockSentinel = null;
+        if (wakeLockRequestId === requestId && canRequestWakeLock()) {
+          requestScreenWakeLock().catch(() => {});
+        }
+      },
+      { once: true }
+    );
+  } catch (error) {
+    console.warn("No se pudo activar el bloqueo de pantalla:", error);
+  }
+}
+
+async function releaseScreenWakeLock() {
+  wakeLockRequestId += 1;
+  if (!wakeLockSentinel) return;
+
+  const activeSentinel = wakeLockSentinel;
+  wakeLockSentinel = null;
+  try {
+    await activeSentinel.release();
+  } catch {}
+}
+
+function syncScreenWakeLock() {
+  if (canRequestWakeLock()) {
+    requestScreenWakeLock().catch(() => {});
+    return;
+  }
+
+  releaseScreenWakeLock().catch(() => {});
+}
+
 function showCompletionSparks() {
   if (!sparkLayerEl) return;
 
@@ -922,6 +980,7 @@ fillSettingsForm();
 transitionToMode("work");
 setQuickNoteOpenState(false);
 startHealthMonitor();
+syncScreenWakeLock();
 
 if (SHOULD_RESET_ON_LOAD) {
   restartWholeCycle();
@@ -930,7 +989,11 @@ if (SHOULD_RESET_ON_LOAD) {
   }
 }
 
+document.addEventListener("visibilitychange", syncScreenWakeLock);
+window.addEventListener("focus", syncScreenWakeLock);
+window.addEventListener("blur", syncScreenWakeLock);
 window.addEventListener("beforeunload", () => {
+  releaseScreenWakeLock().catch(() => {});
   if (healthCheckIntervalId !== null) {
     clearInterval(healthCheckIntervalId);
     healthCheckIntervalId = null;

@@ -54,8 +54,22 @@ if [[ -n "$LISTEN_PIDS" ]]; then
   fi
 fi
 
-if [[ "${POMODOR_NO_OPEN:-0}" == "1" ]]; then
-  python3 web_server.py --interactive --fresh-start --port "$PORT"
-else
-  python3 web_server.py --interactive --open-browser --fresh-start --port "$PORT"
+SERVER_CMD=(python3 web_server.py --interactive --fresh-start --port "$PORT")
+
+if [[ "${POMODOR_NO_OPEN:-0}" != "1" ]]; then
+  SERVER_CMD+=(--open-browser)
 fi
+
+USE_CAFFEINATE="0"
+if [[ "$(uname -s)" == "Darwin" ]] && command -v caffeinate >/dev/null 2>&1; then
+  if [[ "${POMODORO_NO_CAFFEINATE:-0}" != "1" ]]; then
+    USE_CAFFEINATE="1"
+  fi
+fi
+
+if [[ "$USE_CAFFEINATE" == "1" ]]; then
+  echo "Activando caffeinate para evitar el bloqueo de pantalla mientras Pomodoro esté abierto..."
+  exec caffeinate -di "${SERVER_CMD[@]}"
+fi
+
+exec "${SERVER_CMD[@]}"

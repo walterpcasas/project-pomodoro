@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import csv
+import os
 import re
+import shutil
+import subprocess
 import threading
 from pathlib import Path
 
@@ -69,14 +72,35 @@ class PomodoroApi:
         return {"ok": True}
 
 
+def start_caffeinate_for_current_process() -> subprocess.Popen[str] | None:
+    if os.name != "posix":
+        return None
+    if shutil.which("caffeinate") is None:
+        return None
+
+    try:
+        return subprocess.Popen(
+            ["caffeinate", "-di", "-w", str(os.getpid())],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except OSError:
+        return None
+
+
 def main() -> None:
     root = Path(__file__).resolve().parent
     csv_path = root / "pomodoro_registros.csv"
     html_path = (root / "index.html").as_uri()
     api = PomodoroApi(csv_path)
+    caffeinate_process = start_caffeinate_for_current_process()
 
-    webview.create_window("Pomodoro", html_path, js_api=api, width=980, height=760)
-    webview.start()
+    try:
+        webview.create_window("Pomodoro", html_path, js_api=api, width=980, height=760)
+        webview.start()
+    finally:
+        if caffeinate_process and caffeinate_process.poll() is None:
+            caffeinate_process.terminate()
 
 
 if __name__ == "__main__":
