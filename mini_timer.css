@@ -34,6 +34,14 @@ body.mode-longBreak {
   background: var(--long-break-bg);
 }
 
+body.mini-timer-hidden {
+  background: transparent !important;
+}
+
+body.mini-timer-hidden .mini-time {
+  opacity: 0;
+}
+
 .mini-time {
   display: block;
   margin: 0;

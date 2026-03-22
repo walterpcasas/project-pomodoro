@@ -117,8 +117,14 @@ let hasSeenHealthyServer = false;
 let miniTimerWindow = null;
 let miniTimerTimeEl = null;
 let miniTimerAutoOpenEnabled = loadMiniTimerAutoOpenPreference();
+let miniTimerVisibilitySyncTimeoutIds = new Set();
+let isMiniTimerWindowVisuallyHidden = false;
 
 const HEALTH_CHECK_INTERVAL_MS = 1800;
+const MINI_TIMER_VISIBILITY_SYNC_DELAYS_MS = [0, 140, 420];
+const MINI_TIMER_WINDOW_WIDTH = 320;
+const MINI_TIMER_WINDOW_HEIGHT = 220;
+const MINI_TIMER_HIDDEN_SIZE = 8;
 
 function normalizeNumber(value, fallback, min, max) {
   const number = Number(value);
@@ -234,6 +240,50 @@ function saveMiniTimerAutoOpenPreference(isEnabled) {
   }
 
   localStorage.setItem(MINI_TIMER_AUTO_OPEN_KEY, "0");
+}
+
+function clearMiniTimerVisibilitySyncQueue() {
+  for (const timeoutId of miniTimerVisibilitySyncTimeoutIds) {
+    clearTimeout(timeoutId);
+  }
+
+  miniTimerVisibilitySyncTimeoutIds.clear();
+}
+
+function shouldShowMiniTimer(options = {}) {
+  const { includeFocusLoss = false } = options;
+  if (document.visibilityState !== "visible") {
+    return true;
+  }
+
+  if (!includeFocusLoss) {
+    return false;
+  }
+
+  const hasFocus = typeof document.hasFocus !== "function" ? true : document.hasFocus();
+  return !hasFocus;
+}
+
+function scheduleMiniTimerVisibilitySync(delays = MINI_TIMER_VISIBILITY_SYNC_DELAYS_MS) {
+  clearMiniTimerVisibilitySyncQueue();
+
+  const normalizedDelays = [...new Set(delays.map((delay) => Math.max(0, Number(delay) || 0)))].sort(
+    (left, right) => left - right
+  );
+
+  for (const delay of normalizedDelays) {
+    if (delay === 0) {
+      syncMiniTimerVisibility();
+      continue;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      miniTimerVisibilitySyncTimeoutIds.delete(timeoutId);
+      syncMiniTimerVisibility();
+    }, delay);
+
+    miniTimerVisibilitySyncTimeoutIds.add(timeoutId);
+  }
 }
 
 function getDurationSeconds(nextMode) {
@@ -455,6 +505,9 @@ function canUseMiniTimerWindow() {
 function setMiniTimerAutoOpenEnabled(isEnabled) {
   miniTimerAutoOpenEnabled = isEnabled;
   saveMiniTimerAutoOpenPreference(isEnabled);
+  if (!isEnabled) {
+    clearMiniTimerVisibilitySyncQueue();
+  }
   updateMiniTimerButtonState();
 }
 
@@ -488,6 +541,7 @@ function updateMiniTimerButtonState() {
 function clearMiniTimerWindowState() {
   miniTimerWindow = null;
   miniTimerTimeEl = null;
+  isMiniTimerWindowVisuallyHidden = false;
   updateMiniTimerButtonState();
 }
 
@@ -502,6 +556,8 @@ function syncMiniTimerWindow() {
     clearMiniTimerWindowState();
     return;
   }
+
+  if (isMiniTimerWindowVisuallyHidden) return;
 
   miniTimerWindow.document.body.className = `mini-timer mode-${mode}`;
   miniTimerTimeEl.textContent = getMiniTimerPayload().time;
@@ -540,6 +596,74 @@ function buildMiniTimerMarkup(pipWindow) {
 
 function handleMiniTimerWindowClosed() {
   clearMiniTimerWindowState();
+  if (miniTimerAutoOpenEnabled && canUseMiniTimerWindow() && shouldShowMiniTimer()) {
+    scheduleMiniTimerVisibilitySync([180, 480]);
+  }
+}
+
+function resizeMiniTimerWindow(width, height) {
+  if (!miniTimerWindow || miniTimerWindow.closed) return;
+  if (typeof miniTimerWindow.resizeTo !== "function") return;
+
+  try {
+    miniTimerWindow.resizeTo(width, height);
+  } catch {}
+}
+
+function moveMiniTimerWindow(x, y) {
+  if (!miniTimerWindow || miniTimerWindow.closed) return;
+  if (typeof miniTimerWindow.moveTo !== "function") return;
+
+  try {
+    miniTimerWindow.moveTo(x, y);
+  } catch {}
+}
+
+function getScreenOrigin() {
+  const screenObj = window.screen;
+  const x = Number.isFinite(screenObj?.availLeft) ? screenObj.availLeft : 0;
+  const y = Number.isFinite(screenObj?.availTop) ? screenObj.availTop : 0;
+  return { x, y };
+}
+
+function getScreenBounds() {
+  const screenObj = window.screen;
+  const origin = getScreenOrigin();
+  const width = Number.isFinite(screenObj?.availWidth) ? screenObj.availWidth : 1440;
+  const height = Number.isFinite(screenObj?.availHeight) ? screenObj.availHeight : 900;
+  return { ...origin, width, height };
+}
+
+function moveMiniTimerWindowToVisibleCorner() {
+  const bounds = getScreenBounds();
+  const targetX = bounds.x + Math.max(0, bounds.width - MINI_TIMER_WINDOW_WIDTH - 24);
+  const targetY = bounds.y + Math.max(0, bounds.height - MINI_TIMER_WINDOW_HEIGHT - 56);
+  moveMiniTimerWindow(targetX, targetY);
+}
+
+function moveMiniTimerWindowOffscreen() {
+  const bounds = getScreenBounds();
+  moveMiniTimerWindow(bounds.x + bounds.width + 200, bounds.y + bounds.height + 200);
+}
+
+function hideMiniTimerWindowVisual() {
+  if (!miniTimerWindow || miniTimerWindow.closed) return;
+
+  isMiniTimerWindowVisuallyHidden = true;
+  miniTimerWindow.document.body.className = "mini-timer mini-timer-hidden";
+  miniTimerTimeEl.textContent = "";
+  resizeMiniTimerWindow(MINI_TIMER_HIDDEN_SIZE, MINI_TIMER_HIDDEN_SIZE);
+  moveMiniTimerWindowOffscreen();
+}
+
+function showMiniTimerWindowVisual() {
+  if (!miniTimerWindow || miniTimerWindow.closed) return;
+
+  isMiniTimerWindowVisuallyHidden = false;
+  resizeMiniTimerWindow(MINI_TIMER_WINDOW_WIDTH, MINI_TIMER_WINDOW_HEIGHT);
+  moveMiniTimerWindowToVisibleCorner();
+  miniTimerWindow.document.body.className = `mini-timer mode-${mode}`;
+  miniTimerTimeEl.textContent = getMiniTimerPayload().time;
 }
 
 async function closeMiniTimerWindow(options = {}) {
@@ -567,20 +691,21 @@ async function openMiniTimerWindow(options = {}) {
   }
 
   if (miniTimerWindow && !miniTimerWindow.closed) {
+    showMiniTimerWindowVisual();
     miniTimerWindow.focus();
     return;
   }
 
   try {
     const pipWindow = await window.documentPictureInPicture.requestWindow({
-      width: 320,
-      height: 220,
+      width: MINI_TIMER_WINDOW_WIDTH,
+      height: MINI_TIMER_WINDOW_HEIGHT,
     });
 
     miniTimerWindow = pipWindow;
     buildMiniTimerMarkup(pipWindow);
     pipWindow.addEventListener("pagehide", handleMiniTimerWindowClosed, { once: true });
-    syncMiniTimerWindow();
+    showMiniTimerWindowVisual();
     updateMiniTimerButtonState();
   } catch (error) {
     if (!silent) {
@@ -597,16 +722,24 @@ async function toggleMiniTimerWindow() {
   }
 
   setMiniTimerAutoOpenEnabled(true);
-  syncMiniTimerVisibility();
+  scheduleMiniTimerVisibilitySync();
 }
 
 function syncMiniTimerVisibility() {
   const nativeMiniTimerApi = getNativeMiniTimerApi();
-  if (nativeMiniTimerApi) {
-    const hasFocus = typeof document.hasFocus !== "function" ? true : document.hasFocus();
-    const shouldShowMiniTimer = document.visibilityState !== "visible" || !hasFocus;
+  if (isServerDown) {
+    clearMiniTimerVisibilitySyncQueue();
+    if (nativeMiniTimerApi) {
+      nativeMiniTimerApi.hide_native_mini_timer().catch(() => {});
+      return;
+    }
 
-    if (shouldShowMiniTimer) {
+    closeMiniTimerWindow({ preserveAutoOpen: true }).catch(() => {});
+    return;
+  }
+
+  if (nativeMiniTimerApi) {
+    if (shouldShowMiniTimer({ includeFocusLoss: true })) {
       nativeMiniTimerApi.show_native_mini_timer(getMiniTimerPayload()).catch(() => {});
       return;
     }
@@ -617,11 +750,13 @@ function syncMiniTimerVisibility() {
 
   if (!miniTimerAutoOpenEnabled || !canUseMiniTimerWindow()) return;
 
-  const hasFocus = typeof document.hasFocus !== "function" ? true : document.hasFocus();
-  const shouldShowMiniTimer = document.visibilityState !== "visible" || !hasFocus;
-
-  if (!shouldShowMiniTimer) {
+  if (!shouldShowMiniTimer()) {
     closeMiniTimerWindow({ preserveAutoOpen: true }).catch(() => {});
+    return;
+  }
+
+  if (miniTimerWindow && !miniTimerWindow.closed) {
+    showMiniTimerWindowVisual();
     return;
   }
 
@@ -987,9 +1122,15 @@ function setShutdownState(nextIsDown) {
   bodyEl.classList.toggle("app-shutdown", nextIsDown);
 
   if (nextIsDown) {
+    clearMiniTimerVisibilitySyncQueue();
     closeSettingsPanel();
     stopRepeatedAlarm();
     stopTonePreview();
+    closeMiniTimerWindow({ preserveAutoOpen: true }).catch(() => {});
+    const nativeMiniTimerApi = getNativeMiniTimerApi();
+    if (nativeMiniTimerApi) {
+      nativeMiniTimerApi.hide_native_mini_timer().catch(() => {});
+    }
     if (intervalId) {
       clearInterval(intervalId);
       intervalId = null;
@@ -1210,7 +1351,7 @@ setQuickNoteOpenState(false);
 startHealthMonitor();
 syncScreenWakeLock();
 syncMiniTimerAvailability();
-syncMiniTimerVisibility();
+scheduleMiniTimerVisibilitySync();
 
 if (SHOULD_RESET_ON_LOAD) {
   restartWholeCycle();
@@ -1221,22 +1362,27 @@ if (SHOULD_RESET_ON_LOAD) {
 
 document.addEventListener("visibilitychange", () => {
   syncScreenWakeLock();
-  syncMiniTimerVisibility();
+  scheduleMiniTimerVisibilitySync();
 });
 window.addEventListener("focus", () => {
   syncScreenWakeLock();
-  syncMiniTimerVisibility();
+  if (hasNativeMiniTimerSupport()) {
+    scheduleMiniTimerVisibilitySync();
+  }
 });
 window.addEventListener("blur", () => {
   syncScreenWakeLock();
-  syncMiniTimerVisibility();
+  if (hasNativeMiniTimerSupport()) {
+    scheduleMiniTimerVisibilitySync();
+  }
 });
 window.addEventListener("pywebviewready", () => {
   syncMiniTimerAvailability();
   syncMiniTimerWindow();
-  syncMiniTimerVisibility();
+  scheduleMiniTimerVisibilitySync();
 });
 window.addEventListener("beforeunload", () => {
+  clearMiniTimerVisibilitySyncQueue();
   closeMiniTimerWindow().catch(() => {});
   const nativeMiniTimerApi = getNativeMiniTimerApi();
   if (nativeMiniTimerApi) {
